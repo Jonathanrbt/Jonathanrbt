@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 48" width="128" height="48" role="img" aria-label="LinkedIn"><title>LinkedIn</title><defs><path id="g0" d="M518 0L73 0L73-700L181-700L181-98L518-98L518 0Z"/><path id="g1" d="M181 0L73 0L73-700L181-700L181 0Z"/><path id="g2" d="M180 0L73 0L73-700L281-700L471-72L487-72L487-700L594-700L594 0L386 0L196-629L180-629L180 0Z"/><path id="g3" d="M181 0L73 0L73-700L181-700L181-409L197-409L458-700L599-700L283-355L610 0L465 0L197-297L181-297L181 0Z"/><path id="g4" d="M519 0L73 0L73-700L514-700L514-602L181-602L181-401L486-401L486-303L181-303L181-98L519-98L519 0Z"/><path id="g5" d="M327 0L47 0L47-96L141-96L141-604L47-604L47-700L327-700Q467-700 542-629Q616-558 616-415L616-415L616-284Q616-141 542-71Q467 0 327 0L327 0ZM250-601L250-98L328-98Q419-98 463-144Q507-190 507-281L507-281L507-419Q507-511 463-556Q419-601 328-601L328-601L250-601Z"/><path id="g6" d="M420-300L109 11L39-59L350-370L386-396L379-411L336-401L158-401L158-493L493-493L544-441L544-107L451-107L451-286L461-330L446-336L420-300Z"/></defs>
+<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#e3c98b" stop-opacity="0"/><stop offset="0.5" stop-color="#e3c98b" stop-opacity="0.22"/><stop offset="1" stop-color="#e3c98b" stop-opacity="0"/></linearGradient><clipPath id="b"><rect width="128" height="48" rx="24"/></clipPath></defs>
+<g clip-path="url(#b)">
+  <rect width="128" height="48" fill="#0a0a0a"/>
+  <rect y="0" width="60" height="48" fill="url(#g)"><animate attributeName="x" values="-80;148;148" keyTimes="0;0.3;1" dur="6s" repeatCount="indefinite"/></rect>
+</g>
+<rect x="0.5" y="0.5" width="127" height="47" rx="23.5" fill="none" stroke="#27272a"/>
+<g transform="translate(24 28) scale(0.011)" fill="#f5f5f5" fill-opacity="0.88"><use href="#g0" x="0"/><use href="#g1" x="764"/><use href="#g2" x="1238"/><use href="#g3" x="2125"/><use href="#g4" x="2963"/><use href="#g5" x="3742"/><use href="#g1" x="4627"/><use href="#g2" x="5101"/></g>
+<g transform="translate(97.36 29) scale(0.014)" fill="#c9aa6e"><use href="#g6" x="0"/></g>
+</svg>

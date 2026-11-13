@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 48" width="106" height="48" role="img" aria-label="Email"><title>Email</title><defs><path id="g0" d="M519 0L73 0L73-700L514-700L514-602L181-602L181-401L486-401L486-303L181-303L181-98L519-98L519 0Z"/><path id="g1" d="M178 0L73 0L73-700L276-700L429-72L445-72L598-700L801-700L801 0L696 0L696-624L680-624L528 0L346 0L194-624L178-624L178 0Z"/><path id="g2" d="M133 0L21 0L221-700L411-700L610 0L499 0L453-165L179-165L133 0ZM308-633L206-265L426-265L324-633L308-633Z"/><path id="g3" d="M181 0L73 0L73-700L181-700L181 0Z"/><path id="g4" d="M518 0L73 0L73-700L181-700L181-98L518-98L518 0Z"/><path id="g5" d="M420-300L109 11L39-59L350-370L386-396L379-411L336-401L158-401L158-493L493-493L544-441L544-107L451-107L451-286L461-330L446-336L420-300Z"/></defs>
+<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#e3c98b" stop-opacity="0"/><stop offset="0.5" stop-color="#e3c98b" stop-opacity="0.22"/><stop offset="1" stop-color="#e3c98b" stop-opacity="0"/></linearGradient><clipPath id="b"><rect width="106" height="48" rx="24"/></clipPath></defs>
+<g clip-path="url(#b)">
+  <rect width="106" height="48" fill="#0a0a0a"/>
+  <rect y="0" width="60" height="48" fill="url(#g)"><animate attributeName="x" values="-80;126;126" keyTimes="0;0.3;1" dur="6s" repeatCount="indefinite"/></rect>
+</g>
+<rect x="0.5" y="0.5" width="105" height="47" rx="23.5" fill="none" stroke="#27272a"/>
+<g transform="translate(24 28) scale(0.011)" fill="#f5f5f5" fill-opacity="0.88"><use href="#g0" x="0"/><use href="#g1" x="779"/><use href="#g2" x="1873"/><use href="#g3" x="2725"/><use href="#g4" x="3199"/></g>
+<g transform="translate(75.36 29) scale(0.014)" fill="#c9aa6e"><use href="#g5" x="0"/></g>
+</svg>

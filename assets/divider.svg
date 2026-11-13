@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 28" width="1000" height="28" role="img" aria-label="divider"><title>divider</title><defs></defs>
+<defs>
+  <linearGradient id="l" x1="0" x2="1"><stop offset="0" stop-color="#27272a" stop-opacity="0"/><stop offset="0.5" stop-color="#27272a"/><stop offset="1" stop-color="#27272a" stop-opacity="0"/></linearGradient>
+  <linearGradient id="s" x1="0" x2="1"><stop offset="0" stop-color="#e3c98b" stop-opacity="0"/><stop offset="0.5" stop-color="#e3c98b"/><stop offset="1" stop-color="#e3c98b" stop-opacity="0"/></linearGradient>
+</defs>
+<rect x="0" y="14" width="1000" height="1" fill="url(#l)"/>
+<rect y="13.5" width="180" height="2" fill="url(#s)"><animate attributeName="x" values="-200;1020;1020" keyTimes="0;0.45;1" dur="8s" repeatCount="indefinite"/></rect>
+<g transform="translate(500 14)"><rect x="-4" y="-4" width="8" height="8" fill="#000000" stroke="#c9aa6e" transform="rotate(45)"/></g>
+</svg>

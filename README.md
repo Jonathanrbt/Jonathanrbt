@@ -1,50 +1,50 @@
-<h1 align="left">Hola <img src="https://media.giphy.com/media/hvRJCLFzcasrR4ia7z/giphy.gif" width="35">, soy Jonathan Romero</h1>
+<!--
+  Every image here is an animated SVG generated from the portfolio content.
+  To update it: edit scripts/data.mjs, then `cd scripts && npm install && npm run build`.
+-->
 
-<img align="right" src="https://raw.githubusercontent.com/Jonathanrbt/Jonathanrbt/refs/heads/main/images/Pictures%20of%20New%20York_0(JPG).jpg" alt="Illustration" title="Illustration Storyset" width=400 />
+<a href="https://jonathanrbt.lat">
+  <img src="./assets/hero.svg" width="100%" alt="Jonathan Romero — Software Developer. Full Stack & AI-Integrations Developer en Bogotá, Colombia. Vivo en el momento anterior a que las cosas existan. Expertise: AI-Integrations, LLMs & Agentes, Full Stack." />
+</a>
 
+<img src="./assets/whoami.svg" width="100%" alt="$ whoami → Jonathan Romero · Full Stack & AI-Integrations Developer. Roles: Full Stack Developer, AI Engineer, AI-Integrations Developer. Construyo de punta a punta, trabajo con IA (LLMs, agentes y RAG), lidero con el ejemplo y entrego bajo presión: 3 hackathones, 3 reconocimientos del jurado." />
 
-<h3 align="left">Apasionado por el aprendizaje y conocer nuevas tecnologías 🚀</h3>
+<img src="./assets/divider.svg" width="100%" alt="" />
 
-<div align="left">
-    <h3>👨🏽‍💻 Acerca de mi:</h3>
-        <p>• 📚 Actualmente estoy construyendo mi camino en el desarrollo de software mientras me acerco a la mejor versión de mi mismo. </b></p>
-        <p>• ℹ️ Pasatiempos: <b>Leer 📖 | Música 🎧 | Ejercicio 🏋🏼 | Bailar 🕺🏼</b></p>
-        <p>• 💬 Preguntame sobre: <b>Cualquier cosa, me encanta el conocimiento y las nuevas cosas</b></p>
-</div><br>
+<img src="./assets/about.svg" width="100%" alt="Sobre mí: Hay un punto en que una idea deja de ser solo pensamiento y empieza a ocupar lugar en el mundo. Ese tránsito —de lo posible a lo real— es quizá lo más cercano que existe a la magia. 3 años de experiencia, 5 proyectos lanzados, 3 hackathones." />
 
-<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif"><br><br>
+<img src="./assets/vision.svg" width="100%" alt="Visión: Ante la inmensidad del tiempo, lo trivial no merece ni un instante del mío. Que cada uno arda en algo que valga la pena recordar." />
 
-<p align="center">
+<img src="./assets/divider.svg" width="100%" alt="" />
 
-    
-<div>
-  <h3><img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif?cid=ecf05e47a0n3gi1bfqntqmob8g9aid1oyj2wr3ds3mg700bl&rid=giphy.gif" width ="25"> Lenguajes y Frameworks que he aprendido hasta ahora</h3><br>
-    <a href="https://"><img src="https://img.shields.io/badge/MongoDB-%234ea94b.svg?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB"></a>
-    <a href="https://"><img src="https://img.shields.io/badge/mysql-4479A1.svg?style=for-the-badge&logo=mysql&logoColor=white" alt="MySQL"></a>
-    <a href="https://"><img src="https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white" alt="NodeJS"></a>
-    <a href="https://"><img src="https://img.shields.io/badge/express.js-%23404d59.svg?style=for-the-badge&logo=express&logoColor=%2361DAFB" alt="Javascript"> </a>
-    <a href="https://"><img src="https://img.shields.io/static/v1?label=&message=Typescript&color=%233178C6&style=for-the-badge&logo=typescript&logoColor=03256C" alt="ExpressJS"></a>
-    <a href="https://"><img src="https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E" alt="JavaScript"></a>
-    <a href="https://"><img src="https://img.shields.io/badge/java-%23ED8B00.svg?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java"></a>
-    <a href="https://"><img src="https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54" alt="Python"></a>
-    <br><br>
-    <a href="https://"><img src="https://img.shields.io/static/v1?label=&message=GIT&color=%23F05032&style=for-the-badge&logo=git&logoColor=whitesmoke" alt="GIT"></a>
-    <a href="https://"><img src="https://img.shields.io/static/v1?label=&message=GITHUB&color=%23181717&style=for-the-badge&logo=github&logoColor=whitesmoke" alt="GITHUB"></a>
-</div>
-
-<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif"><br><br>
+<img src="./assets/section-projects.svg" width="100%" alt="Proyectos" />
 
 <p align="center">
+  <a href="https://web-production-9f9d1.up.railway.app/"><img src="./assets/projects/adkio.svg" width="49%" alt="AdKio — Agente de IA que ejecuta campañas en Meta Ads desde lenguaje natural. GTM Hackathon, top 2." /></a>
+  <a href="https://gambitoai.pages.dev/"><img src="./assets/projects/gambito.svg" width="49%" alt="Gambito — Asistente legal de IA que analiza expedientes y genera documentos jurídicos." /></a>
+  <a href="https://sniff-plum.vercel.app/"><img src="./assets/projects/sniff.svg" width="49%" alt="Sniff — Agente de IA para code review de Pull Requests. Reconocido en el Vercel Hackathon." /></a>
+  <a href="https://platform-migratory-frontend.pages.dev/"><img src="./assets/projects/platform-migratory.svg" width="49%" alt="Platform Migratory — Trámites migratorios con validación de documentos por IA." /></a>
+  <a href="https://jojun-cli.jonathanrbt.lat/"><img src="./assets/projects/jojun.svg" width="49%" alt="JoJun — CLI P2P cifrada para compartir texto entre terminales, sin nube ni servidor." /></a>
+</p>
 
-<div>
-  <h3>📱 Redes Sociales: </h3><br>
-    <a href="https://www.linkedin.com/in/jonathan-romero-b2044a303/" target="_blank"><img src="https://img.shields.io/static/v1?label=&message=Linkedin&color=0A66C2&style=for-the-badge&logo=linkedin&logoColor=whitesmoke" alt="Linkedin"></a>
-    <a href="https://www.instagram.com/jonathanrbt_tv/" target="_blank"><img src="https://img.shields.io/static/v1?label=&message=Instagram&color=lightpink&style=for-the-badge&logo=instagram&logoColor=black" alt="Instagram"></a>
-</div>
-    <a href="jonathanrbttv@gmail.com" target="_blank"><img src="https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white" alt="Gmail"></a>
+<img src="./assets/section-experience.svg" width="100%" alt="Experiencia" />
 
-<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif"><br><br>
+<img src="./assets/experience.svg" width="100%" alt="Full Stack Developer & AI Lead en Solvo Global (Jul — Dic 2025): lideré un equipo de 4, bot de ventas con LangChain, LangGraph y Qdrant (RAG), plataforma de exámenes con LLMs. Desarrollo de Software en Universidad EAN (2025). Bootcamp Java Profesional en Código Facilito (2024)." />
+
+<img src="./assets/section-tech.svg" width="100%" alt="Tecnologías" />
+
+<img src="./assets/tech.svg" width="100%" alt="Python, TypeScript, JavaScript, Java, Go, Rust, React, Next.js, React Native, Expo, Astro, Tailwind CSS, Vite, Node.js, Express, FastAPI, MySQL, PostgreSQL, Qdrant, MongoDB, Redis, Supabase, LangChain, LangGraph, RAG, Cursor, Claude Code, Herdr, Git, GitHub, Docker, Google Cloud, AWS, Cloudflare, Scrum." />
+
+<img src="./assets/section-contact.svg" width="100%" alt="Contacto" />
+
+<img src="./assets/contact.svg" width="100%" alt="¿Tienes una idea que aún no existe? Disponible para nuevas oportunidades — Remoto, Híbrido, Bogotá, Colombia." />
 
 <p align="center">
+  <a href="https://jonathanrbt.lat"><img src="./assets/btn-portfolio.svg" height="48" alt="Portafolio" /></a>
+  <a href="https://www.linkedin.com/in/jonathan-romero-b2044a303"><img src="./assets/btn-linkedin.svg" height="48" alt="LinkedIn" /></a>
+  <a href="mailto:jonathanstiwarromerobetancourt@gmail.com"><img src="./assets/btn-email.svg" height="48" alt="Email" /></a>
+  <a href="https://jonathanrbt.lat/CV_Jonathan_Romero_Espa%C3%B1ol.pdf"><img src="./assets/btn-cv-es.svg" height="48" alt="CV Español" /></a>
+  <a href="https://jonathanrbt.lat/CV_Jonathan_Romero_English.pdf"><img src="./assets/btn-cv-en.svg" height="48" alt="CV English" /></a>
+</p>
 
-Credit: [gabrlcj](https://github.com/gabrlcj)
+<img src="./assets/footer.svg" width="100%" alt="Full Stack & AI-Integrations Developer · Bogotá, Colombia — Diseñado y construido por mí" />
