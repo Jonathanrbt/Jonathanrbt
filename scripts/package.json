@@ -6,6 +6,7 @@
     "build": "node build.mjs"
   },
   "devDependencies": {
-    "opentype.js": "^1.3.4"
+    "figlet": "^1.12.0",
+    "subset-font": "^2.9.0"
   }
 }

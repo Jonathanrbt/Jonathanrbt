@@ -1,171 +1,125 @@
-// Generates the animated SVGs of the GitHub profile README in ../assets.
+// Builds assets/terminal.svg: the whole profile README as one continuous,
+// animated terminal session (no seams between sections).
 //
-// Static panels (hero, fastfetch, ship log) come from data.mjs.
-// Live panels (now, constellation) come from the GitHub API and are refreshed
-// daily by .github/workflows/refresh.yml; without a token they are skipped and
-// the committed versions stay as they are.
+// - Text is real <text> set in JetBrains Mono, embedded as a subset woff2
+//   (an SVG inside <img> cannot fetch fonts).
+// - The torus knot is rendered to ASCII frames by ascii3d.mjs
+//   and flipped with CSS steps(), the README-safe stand-in for the
+//   three.js AsciiEffect scene.
+// - "Ahora mismo" and the contribution map come from the GitHub API; the last
+//   result is cached in activity.json so builds without a token still work.
 //
 // Usage: npm install && npm run build
 
-import {
-  C, W, F, GLYPHS, r2, rng, hash, txt, runs, measure, layout, glyphFor, truncate, sanitize, hasGlyph,
-  svgOpen, write, frame, chrome, label, asterisk, glow, glowDefs, reducedMotion, fadeCss,
-} from './lib.mjs';
-import { LOGIN, HERO, SYSTEM, SHIPS, FOOTER } from './data.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import figlet from 'figlet';
+import subsetFont from 'subset-font';
+import { torusKnot, renderFrames } from './ascii3d.mjs';
+import { LOGIN, SITE, HERO, BOOT, SYSTEM, SHIPS, FOOTER } from './data.mjs';
 import { fetchActivity } from './github.mjs';
 
-const PROMPT = hasGlyph(F.mono, '❯') ? '❯' : '$';
-const ARROW = hasGlyph(F.medium, '↗') ? '↗' : '→';
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const OUT = path.join(ROOT, '..', 'assets');
+const CACHE = path.join(ROOT, '.cache');
+const ACTIVITY = path.join(ROOT, 'activity.json');
+fs.mkdirSync(OUT, { recursive: true });
+fs.mkdirSync(CACHE, { recursive: true });
 
-// Prompt "❯ ~" followed by a command typed key by key (SMIL, discrete steps).
-function typedCommand(id, cmd, x, y, begin, { size = 14, speed = 0.06 } = {}) {
-  const cw = measure(F.mono, 'M', size);
-  const cx = x + cw * 4;
-  const n = [...cmd].length;
-  const dur = r2(n * speed);
-  const widths = Array.from({ length: n + 1 }, (_, k) => r2(k * cw)).join(';');
-  const xs = Array.from({ length: n + 1 }, (_, k) => r2(cx + k * cw)).join(';');
-  return {
-    end: begin + dur,
-    defs: `<clipPath id="${id}"><rect x="${cx}" y="${y - 16}" height="22" width="0"><animate attributeName="width" values="${widths}" dur="${dur}s" begin="${begin}s" calcMode="discrete" fill="freeze"/></rect></clipPath>`,
-    svg: `${txt(F.mono, PROMPT, x, y, size, { fill: C.gold })}${txt(F.mono, '~', x + cw * 2, y, size, { fill: C.sepia })}
-<g clip-path="url(#${id})">${txt(F.mono, cmd, cx, y, size)}</g>
-<rect y="${y - 14}" width="${r2(cw)}" height="18" fill="${C.gold}" opacity="0.85" x="${cx}"><animate attributeName="x" values="${xs}" dur="${dur}s" begin="${begin}s" calcMode="discrete" fill="freeze"/><set attributeName="opacity" to="0" begin="${r2(begin + dur + 0.25)}s"/></rect>`,
-  };
+// ─── Look ────────────────────────────────────────────────────────────────────
+
+const W = 1000;
+const PAD = 36;
+const SIZE = 13;
+const LH = 20;
+const cw = (size = SIZE) => size * 0.6; // JetBrains Mono advance = 600/1000 em
+const COLS = Math.floor((W - PAD * 2) / cw());
+const C = { bg: '#050505', fg: '#d9d9d9', hi: '#ffffff', dim: '#8a8a8a', faint: '#4d4d4d', ghost: '#262626' };
+const PROMPT = [{ t: 'jonatin@cachyos', c: 'hi', b: true }, { t: ' ~', c: 'dim' }, { t: '> ', c: 'faint' }];
+
+// The layout is timed in "script seconds"; K compresses the whole session
+// so it plays in about nine real seconds.
+const K = 0.6;
+
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const r2 = (n) => Math.round(n * 100) / 100;
+const hash = (s) => [...s].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) | 0, 7);
+const len = (s) => [...s].length;
+
+// ─── Drawing primitives ──────────────────────────────────────────────────────
+
+const parts = [];
+const defs = [];
+let clipId = 0;
+
+// One line of styled runs: [{ t, c: 'hi'|'fg'|'dim'|'faint'|'ghost', b }].
+function line(x, y, runs, { size = SIZE, at, cls = '', anchor } = {}) {
+  const spans = runs.map((r) => `<tspan class="${r.c ?? 'fg'}${r.b ? ' b' : ''}">${esc(r.t)}</tspan>`).join('');
+  const klass = [at != null ? 'p' : '', cls].filter(Boolean).join(' ');
+  return `<text x="${r2(x)}" y="${r2(y)}"${size !== SIZE ? ` font-size="${size}"` : ''}${anchor ? ` text-anchor="${anchor}"` : ''}${klass ? ` class="${klass}"` : ''}${at != null ? ` style="animation-delay:${r2(at * K)}s"` : ''}>${spans}</text>`;
 }
 
-// ─── 1. Hero: name in "signal decode" ────────────────────────────────────────
-
-function hero() {
-  const H = 350;
-  const size = 104;
-  const tracking = -0.05;
-  const x0 = 56;
-  const baselines = [166, 258];
-  const words = HERO.name.toUpperCase().split(' ');
-  const rand = rng(11);
-  const start = 0.35;
-  const stagger = 0.06;
-  const churn = 0.34;
-  const steps = 4;
-  const scr = [];
-  const fin = [];
-  const split = [];
-  const whole = [];
-  let i = 0;
-  let lastLock = 0;
-
-  words.forEach((word, li) => {
-    const y = baselines[li];
-    for (const { g, x } of layout(F.bold, word, size, tracking).glyphs) {
-      const gx = x0 + x;
-      const appear = start + i * stagger;
-      const lock = appear + churn + rand() * 0.06;
-      lastLock = Math.max(lastLock, lock);
-      for (let k = 0; k < steps; k++) {
-        const ch = GLYPHS[Math.floor(rand() * GLYPHS.length)];
-        scr.push(`<path d="${glyphFor(F.bold, ch).getPath(gx, y, size).toPathData(1)}" class="scr" style="animation-delay:${r2(appear + (k * churn) / steps)}s"/>`);
-      }
-      const d = g.getPath(gx, y, size).toPathData(1);
-      fin.push(`<path d="${d}" class="fin" style="animation-delay:${r2(lock)}s"/>`);
-      split.push(`<path d="${d}" class="sp sp1" style="animation-delay:${r2(lock)}s"/><path d="${d}" class="sp sp2" style="animation-delay:${r2(lock)}s"/>`);
-      whole.push(d);
-      i++;
-    }
-  });
-
-  const decoded = r2(lastLock + 0.35);
-  const allD = whole.join('');
-  // Lean like the portfolio's italic title, pivoting on the last baseline.
-  const skew = `translate(0 ${baselines[1]}) skewX(-9) translate(0 ${-baselines[1]})`;
-
-  const css = `
-.scr{fill:${C.gold};opacity:0;filter:blur(.5px);animation:scr ${r2(churn / steps)}s linear none}
-@keyframes scr{from,to{opacity:.72}}
-.fin{fill:${C.text};opacity:0;transform-box:fill-box;transform-origin:50% 100%;animation:lock .3s cubic-bezier(.16,1,.3,1) forwards}
-@keyframes lock{0%{opacity:.5;fill:${C.gold};transform:translateY(-6px) skewX(8deg)}45%{opacity:1;fill:${C.cream};transform:skewX(-3deg)}100%{opacity:.94;fill:${C.text};transform:none}}
-.sp{opacity:0;animation:sp .3s ease-out none}
-.sp1{fill:${C.sepia};transform:translateX(2px)}.sp2{fill:${C.goldLight};transform:translateX(-2px)}
-@keyframes sp{0%{opacity:.75}100%{opacity:0}}
-.b1,.b2{opacity:0;filter:blur(.8px);animation:9s steps(1,end) infinite}
-.b1{fill:${C.goldLight};animation-name:b1;animation-delay:${r2(decoded + 1)}s}
-.b2{fill:${C.sepia};animation-name:b2;animation-delay:${r2(decoded + 1.08)}s}
-@keyframes b1{0%,92%,100%{opacity:0;transform:none;clip-path:inset(0 0 100% 0)}93%{opacity:.4;transform:translate(-4px,-2px);clip-path:inset(8% 0 64% 0)}95%{opacity:.35;transform:translate(3px,1px);clip-path:inset(52% 0 22% 0)}97%{opacity:0}}
-@keyframes b2{0%,92%,100%{opacity:0;transform:none;clip-path:inset(0 0 100% 0)}93%{opacity:.4;transform:translate(4px,2px);clip-path:inset(70% 0 8% 0)}95%{opacity:.35;transform:translate(-3px,-1px);clip-path:inset(18% 0 56% 0)}97%{opacity:0}}
-${fadeCss}
-${reducedMotion('.scr,.sp,.b1,.b2{display:none}.fin{animation:none;opacity:.94}.in{animation:none;opacity:1}')}`;
-
-  const inner = `
-${glow(800, 110, 330, -60, 40, 16)}
-${glow(150, 380, 280, 70, -30, 21)}
-${asterisk(820, 190, 86)}
-<g class="in" style="animation-delay:.1s">
-  ${label(HERO.role, x0, 58, { size: 10.5 })}
-  ${label(HERO.where, W - 56, 58, { fill: C.text, opacity: 0.4, size: 10.5, anchor: 'end' })}
-</g>
-<g transform="${skew}">
-  ${scr.join('')}${split.join('')}${fin.join('')}
-  <path d="${allD}" class="b1"/><path d="${allD}" class="b2"/>
-</g>
-<g class="in" style="animation-delay:${decoded}s">${txt(F.serif, HERO.line, x0, 310, 25, { fill: C.cream, opacity: 0.9 })}</g>`;
-
-  write('hero.svg', `${svgOpen(W, H, `${HERO.name} — ${HERO.role}. ${HERO.line}`)}<style>${css}</style>${frame(W, H, inner, { extraDefs: glowDefs })}</svg>`);
+// Runs revealed key by key (SMIL clip, discrete steps), with a block cursor.
+function typed(x, y, runs, at, { speed = 0.045, size = SIZE, keepCursor = false } = {}) {
+  const n = runs.reduce((s, r) => s + len(r.t), 0);
+  const w = cw(size);
+  const dur = r2(Math.max(0.05, n * speed * K));
+  const begin = r2(at * K);
+  const id = `t${clipId++}`;
+  const widths = Array.from({ length: n + 1 }, (_, k) => r2(k * w)).join(';');
+  const xs = Array.from({ length: n + 1 }, (_, k) => r2(x + k * w)).join(';');
+  defs.push(`<clipPath id="${id}"><rect x="${r2(x)}" y="${r2(y - size)}" height="${r2(size * 1.5)}" width="0"><animate attributeName="width" values="${widths}" dur="${dur}s" begin="${begin}s" calcMode="discrete" fill="freeze"/></rect></clipPath>`);
+  const cursorEnd = keepCursor ? '' : `<set attributeName="opacity" to="0" begin="${r2(begin + dur + 0.1)}s"/>`;
+  const cursor = `<rect x="${r2(x)}" y="${r2(y - size * 0.95)}" width="${r2(w)}" height="${r2(size * 1.25)}" fill="${C.hi}" opacity="0"><set attributeName="opacity" to="0.9" begin="${r2(Math.max(0, begin - 0.15))}s"/><animate attributeName="x" values="${xs}" dur="${dur}s" begin="${begin}s" calcMode="discrete" fill="freeze"/>${cursorEnd}${keepCursor ? `<animate attributeName="opacity" values="0.9;0" dur="1.06s" begin="${r2(begin + dur)}s" repeatCount="indefinite" calcMode="discrete"/>` : ''}</rect>`;
+  return { svg: `<g clip-path="url(#${id})">${line(x, y, runs, { size })}</g>${cursor}`, end: at + dur / K };
 }
 
-// ─── 2. fastfetch: the dev setup as identity ─────────────────────────────────
-
-function fastfetch() {
-  const size = 14.5;
-  const lh = 25;
-  const x0 = 30;
-  const cmd = typedCommand('t0', 'fastfetch', x0, 78, 0.5);
-  const t0 = cmd.end + 0.25;
-  const ix = 360;
-  const keyW = measure(F.monoBold, 'MMMMMMMM', size);
-  const [user, host] = SYSTEM.host.split('@');
-  let y = 128;
-  const rows = [];
-  rows.push(`<g class="in" style="animation-delay:${r2(t0)}s">${runs([
-    { t: user, fill: C.gold, font: F.monoBold, size },
-    { t: '@', fill: C.muted, size },
-    { t: host, fill: C.gold, font: F.monoBold, size },
-  ], ix, y)}</g>`);
-  y += 14;
-  rows.push(`<line x1="${ix}" y1="${y}" x2="${r2(ix + measure(F.mono, SYSTEM.host, size))}" y2="${y}" stroke="${C.border}" class="in" style="animation-delay:${r2(t0)}s"/>`);
-  y += 26;
-  SYSTEM.rows.forEach(([k, v], i) => {
-    rows.push(`<g class="in" style="animation-delay:${r2(t0 + 0.05 * (i + 1))}s">${txt(F.monoBold, k, ix, y, size, { fill: C.gold })}${txt(F.mono, v, ix + keyW, y, size, { opacity: 0.85 })}</g>`);
-    y += lh;
-  });
-  y += 8;
-  const palette = [C.bg, C.bar, C.border, C.muted, C.sepia, C.gold, C.goldLight, C.cream];
-  const swatches = palette.map((c, i) => `<rect x="${ix + i * 30}" y="${y}" width="26" height="14" rx="3" fill="${c}" stroke="${C.border}"/>`).join('');
-  rows.push(`<g class="in" style="animation-delay:${r2(t0 + 0.05 * (SYSTEM.rows.length + 2))}s">${swatches}</g>`);
-  const H = y + 40;
-  const logoY = r2((128 + y + 14) / 2);
-
-  const css = `${fadeCss}
-.logo{opacity:0;animation:in 1.2s cubic-bezier(.16,1,.3,1) ${r2(t0)}s forwards}
-${reducedMotion('.in,.logo{animation:none;opacity:1}')}`;
-  const inner = `
-${chrome(W, `${SYSTEM.host}: ~`, 'fish')}
-${glow(185, logoY, 220, 20, -20, 15)}
-${cmd.svg}
-<g class="logo">
-  ${asterisk(185, logoY, 92, { opacity: 0.85, dur: 30, width: 2 })}
-  ${asterisk(185, logoY, 56, { opacity: 0.35, dur: 22, width: 1 })}
-</g>
-${rows.join('\n')}`;
-  write('fastfetch.svg', `${svgOpen(W, H, `fastfetch — ${SYSTEM.rows.map(([k, v]) => `${k}: ${v}`).join(', ')}`)}<style>${css}</style>${frame(W, H, inner, { extraDefs: glowDefs + cmd.defs, rx: 16 })}</svg>`);
+// Shell prompt + typed command. Returns the time the command finished.
+function command(y, cmd, at) {
+  const promptW = PROMPT.reduce((s, r) => s + len(r.t), 0) * cw();
+  parts.push(line(PAD, y, PROMPT, { at: Math.max(0, at - 0.25) }));
+  const t = typed(PAD + promptW, y, [{ t: cmd, c: 'hi' }], at);
+  parts.push(t.svg);
+  return t.end + 0.25;
 }
 
-// ─── 4. Now: latest push + languages (live) ──────────────────────────────────
+// Section rule: "── 02 · ahora mismo ─────────".
+function rule(y, n, title, at) {
+  const head = `── ${String(n).padStart(2, '0')} · ${title} `;
+  parts.push(line(PAD, y, [{ t: '── ', c: 'faint' }, { t: String(n).padStart(2, '0'), c: 'dim' }, { t: ` · ${title} `, c: 'hi', b: true }, { t: '─'.repeat(COLS - len(head)), c: 'ghost' }], { at }));
+}
+
+// Flip-book of ASCII frames (CSS steps). Frame i is visible during [i, i+1)/n.
+function flipbook(frames, x, y, { size, lh, dur, at, cls }) {
+  const n = frames.length;
+  const step = dur / n;
+  const w = cw(size);
+  const groups = frames.map((rows, i) => {
+    const tspans = rows.map((row, ri) => {
+      const lead = row.length - row.trimStart().length;
+      const body = row.trim();
+      return body ? `<tspan x="${r2(x + lead * w)}" y="${r2(y + ri * lh)}">${esc(body)}</tspan>` : '';
+    }).join('');
+    const delay = r2(-(((n - i) % n) * step));
+    return `<text class="kf" style="animation-delay:${delay}s">${tspans}</text>`;
+  }).join('');
+  return `<g class="${cls} p" style="animation-delay:${r2(at * K)}s" font-size="${size}">${groups}</g>`;
+}
+
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+let activity = await fetchActivity(LOGIN).catch((e) => {
+  console.warn(`  ! live data unavailable: ${e.message}`);
+  return null;
+});
+if (activity) fs.writeFileSync(ACTIVITY, `${JSON.stringify({ ...activity, fetchedAt: new Date().toISOString() }, null, 1)}\n`);
+else if (fs.existsSync(ACTIVITY)) activity = JSON.parse(fs.readFileSync(ACTIVITY, 'utf8'));
+const now = activity?.fetchedAt ? new Date(activity.fetchedAt) : new Date();
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-const shortDate = (d) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-
-function ago(iso, today) {
-  const m = Math.max(0, Math.round((today - Date.parse(iso)) / 60000));
+function ago(iso) {
+  const m = Math.max(0, Math.round((now - Date.parse(iso)) / 60000));
   if (m < 60) return m <= 1 ? 'hace un momento' : `hace ${m} minutos`;
   const h = Math.round(m / 60);
   if (h < 24) return h === 1 ? 'hace 1 hora' : `hace ${h} horas`;
@@ -175,245 +129,311 @@ function ago(iso, today) {
   return mo === 1 ? 'hace 1 mes' : `hace ${mo} meses`;
 }
 
-function now(data, today) {
-  const H = 232;
-  const x0 = 44;
-  const rx = 560;
-  const shades = [C.cream, C.goldLight, C.gold, C.sepia, C.dim];
-  const parts = [];
+// ─── Layout: one continuous session ──────────────────────────────────────────
 
-  if (data.latest) {
-    const repo = truncate(F.bold, data.latest.repo, 34, 460);
-    const msg = truncate(F.mono, sanitize(F.mono, data.latest.message), 13, 440);
-    parts.push(`<g class="in" style="animation-delay:.2s">${label('último push', x0, 92, { fill: C.text, opacity: 0.4, size: 9.5 })}</g>`);
-    parts.push(`<g class="in" style="animation-delay:.3s">${txt(F.bold, repo, x0, 134, 34, { tracking: -0.03 })}</g>`);
-    parts.push(`<g class="in" style="animation-delay:.42s">${runs([{ t: `${PROMPT} `, fill: C.gold, size: 13 }, { t: msg, size: 13, opacity: 0.7 }], x0, 164)}</g>`);
-    parts.push(`<g class="in" style="animation-delay:.54s">${txt(F.serif, ago(data.latest.date, today), x0, 198, 17, { fill: C.cream, opacity: 0.8 })}</g>`);
-  }
+let y = 76;
+let t = 0.3;
 
-  // Language bar: segments grow in sequence.
-  const barW = W - 44 - rx;
-  let bx = rx;
-  const bar = [];
-  const legend = [];
-  data.languages.forEach((l, i) => {
-    const w = Math.max(2, l.pct * barW);
-    bar.push(`<rect x="${r2(bx)}" y="104" width="${r2(Math.max(1, w - 2))}" height="8" rx="2" fill="${shades[i]}" class="grow" style="animation-delay:${r2(0.4 + i * 0.12)}s"/>`);
-    bx += w;
-    const lx = rx + (i < 3 ? 0 : 220);
-    const ly = 146 + (i % 3) * 26;
-    legend.push(`<g class="in" style="animation-delay:${r2(0.6 + i * 0.08)}s"><rect x="${lx}" y="${ly - 9}" width="9" height="9" rx="2" fill="${shades[i]}"/>${txt(F.medium, l.name, lx + 18, ly, 14, { opacity: 0.85 })}${txt(F.mono, `${(l.pct * 100).toFixed(1)}%`, lx + 196, ly, 12, { fill: C.muted, anchor: 'end' })}</g>`);
-  });
-
-  const css = `${fadeCss}
-.grow{transform-box:fill-box;transform-origin:0 50%;transform:scaleX(0);animation:grow .9s cubic-bezier(.16,1,.3,1) forwards}
-@keyframes grow{to{transform:scaleX(1)}}
-${reducedMotion('.in{animation:none;opacity:1}.grow{animation:none;transform:none}')}`;
-  const inner = `
-${glow(900, 40, 240, -40, 30, 18)}
-<g class="in">${label('Ahora mismo', x0, 50, { size: 10.5 })}${label(`actualizado ${shortDate(today)}`, W - 44, 50, { fill: C.text, opacity: 0.35, size: 9.5, anchor: 'end' })}</g>
-<line x1="${rx - 40}" y1="78" x2="${rx - 40}" y2="${H - 30}" stroke="${C.border}"/>
-${parts.join('\n')}
-<g class="in" style="animation-delay:.2s">${label('lenguajes · últimos 12 meses', rx, 92, { fill: C.text, opacity: 0.4, size: 9.5 })}</g>
-${bar.join('')}
-${legend.join('')}`;
-  const title = `Ahora mismo: ${data.latest ? `último push en ${data.latest.repo}, ${ago(data.latest.date, today)}. ` : ''}Lenguajes: ${data.languages.map((l) => `${l.name} ${(l.pct * 100).toFixed(0)}%`).join(', ')}`;
-  write('now.svg', `${svgOpen(W, H, title)}<style>${css}</style>${frame(W, H, inner, { extraDefs: glowDefs })}</svg>`);
-}
-
-// ─── 5. Contributions as a constellation (live) ──────────────────────────────
-
-function constellation(data) {
-  const H = 262;
-  const weeks = data.weeks;
-  const cell = 16.2;
-  const gridW = weeks.length * cell;
-  const x0 = (W - gridW) / 2 + cell / 2;
-  const y0 = 96;
-  const radius = [1.1, 1.9, 2.6, 3.3, 4.1];
-  const tone = [C.dim, C.sepia, C.gold, C.goldLight, C.cream];
-
-  const dots = [];
-  const halos = [];
-  const peaks = [];
-  const months = [];
-  let lastMonth = -1;
-  weeks.forEach((week, wi) => {
-    const x = r2(x0 + wi * cell);
-    const first = new Date(`${week[0].date}T00:00:00Z`);
-    if (first.getUTCMonth() !== lastMonth && first.getUTCDate() <= 7) {
-      lastMonth = first.getUTCMonth();
-      if (wi < weeks.length - 2) months.push(label(MONTHS[lastMonth], x - 3, y0 + 7 * cell + 18, { fill: C.text, opacity: 0.3, size: 8.5 }));
-    }
-    let peak = null;
-    week.forEach((d) => {
-      const y = r2(y0 + new Date(`${d.date}T00:00:00Z`).getUTCDay() * cell);
-      const h = Math.abs(hash(d.date));
-      const delay = r2(0.2 + wi * 0.025);
-      if (!d.count) {
-        dots.push(`<circle cx="${x}" cy="${y}" r="${radius[0]}" fill="${tone[0]}" opacity=".7"/>`);
-        return;
-      }
-      const cls = h % 4 === 0
-        ? `class="in tw" style="animation-delay:${delay}s,${r2(2 + (h % 7) * 0.6)}s;animation-duration:.8s,${r2(2.4 + (h % 5) * 0.7)}s"`
-        : `class="in" style="animation-delay:${delay}s"`;
-      dots.push(`<circle cx="${x}" cy="${y}" r="${radius[d.level]}" fill="${tone[d.level]}" ${cls}/>`);
-      if (d.level >= 3) halos.push(`<circle cx="${x}" cy="${y}" r="${r2(radius[d.level] * 3)}" fill="url(#halo)" class="in" style="animation-delay:${delay}s"/>`);
-      if (!peak || d.count > peak.count) peak = { x, y, count: d.count };
-    });
-    peaks.push(peak);
-  });
-
-  // Constellation lines between each week's brightest star.
-  const segs = [];
-  for (let i = 1; i < peaks.length; i++) {
-    if (peaks[i] && peaks[i - 1]) segs.push(`M${peaks[i - 1].x} ${peaks[i - 1].y}L${peaks[i].x} ${peaks[i].y}`);
-  }
-
-  const fmt = (n) => n.toLocaleString('es-CO');
-  const statParts = [
-    { t: fmt(data.total), font: F.bold, size: 15, fill: C.gold },
-    { t: '  CONTRIBUCIONES     ', font: F.medium, size: 9.5, tracking: 0.2, opacity: 0.45 },
-    { t: String(data.streak.current), font: F.bold, size: 15, fill: C.gold },
-    { t: '  RACHA ACTUAL     ', font: F.medium, size: 9.5, tracking: 0.2, opacity: 0.45 },
-    { t: String(data.streak.longest), font: F.bold, size: 15, fill: C.gold },
-    { t: '  RACHA MÁS LARGA', font: F.medium, size: 9.5, tracking: 0.2, opacity: 0.45 },
-  ];
-  const statsW = statParts.reduce((s, p) => s + measure(p.font, p.t, p.size, p.tracking ?? 0), 0);
-
-  const css = `
-.in{opacity:0;animation:in .8s ease-out forwards}
-@keyframes in{to{opacity:1}}
-.tw{animation-name:in,tw;animation-timing-function:ease-out,ease-in-out;animation-iteration-count:1,infinite;animation-fill-mode:forwards,none}
-@keyframes tw{0%,100%{opacity:1}50%{opacity:.25}}
-.links{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 3.5s ease-in-out 1s forwards}
-@keyframes draw{to{stroke-dashoffset:0}}
-${reducedMotion('.in,.tw{animation:none;opacity:1}.links{animation:none;stroke-dashoffset:0}')}`;
-  const inner = `
-${glow(W / 2, 150, 420, 0, 20, 16)}
-${label('Un año de commits', 44, 54, { size: 10.5 })}
-${runs(statParts, W - 44 - statsW, 55)}
-<path d="${segs.join('')}" fill="none" stroke="${C.gold}" stroke-opacity=".28" stroke-width=".8" pathLength="1" class="links"/>
-${halos.join('')}
-${dots.join('')}
-${months.join('')}`;
-  write('constellation.svg', `${svgOpen(W, H, `${data.total} contribuciones en el último año. Racha actual: ${data.streak.current} días, racha más larga: ${data.streak.longest} días.`)}<style>${css}</style>${frame(W, H, inner, {
-    extraDefs: `${glowDefs}<radialGradient id="halo"><stop offset="0" stop-color="${C.goldLight}" stop-opacity=".35"/><stop offset="1" stop-color="${C.goldLight}" stop-opacity="0"/></radialGradient>`,
-  })}</svg>`);
-}
-
-// ─── 6. Ship log: projects as `git log --graph` ──────────────────────────────
-
-function shiplog() {
-  const top = 104;
-  const rowH = 66;
-  const gx = 46;
-  const x0 = 72;
-  const H = top + SHIPS.length * rowH - 10;
-  const rows = SHIPS.map((s, i) => {
-    const y = top + i * rowH;
-    const sha = (hash(s.name) >>> 0).toString(16).padStart(8, '0').slice(0, 7);
-    const deco = [];
-    if (i === 0) deco.push({ t: '(', fill: C.muted }, { t: 'HEAD -> main', fill: C.goldLight }, { t: ') ', fill: C.muted });
-    if (s.tag) deco.push({ t: '(', fill: C.muted }, { t: `tag: ${s.tag}`, fill: C.goldLight }, { t: ') ', fill: C.muted });
-    const head = runs([
-      { t: `${sha} `, fill: C.sepia, size: 13.5 },
-      ...deco.map((d) => ({ ...d, size: 13.5 })),
-      { t: 'feat: ', fill: C.gold, size: 13.5 },
-      { t: s.name, font: F.monoBold, size: 13.5 },
-    ], x0, y);
-    const sub = runs([
-      { t: s.what, font: F.light, size: 15, opacity: 0.65 },
-      { t: `   ${s.stack}`, size: 11.5, fill: C.muted },
-    ], x0, y + 26);
-    const kind = label(s.link ? `${s.kind} ${ARROW}` : s.kind, W - 40, y + 4, { fill: C.text, opacity: 0.35, size: 9.5, anchor: 'end' });
-    const dot = i === 0
-      ? `<circle cx="${gx}" cy="${y - 5}" r="5.5" fill="${C.gold}"/>`
-      : `<circle cx="${gx}" cy="${y - 5}" r="5" fill="${C.bg}" stroke="${C.gold}" stroke-width="1.5"/>`;
-    return `<g class="in" style="animation-delay:${r2(0.3 + i * 0.14)}s">${dot}${head}${sub}${kind}</g>`;
-  });
-  const css = `${fadeCss}
-.graph{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.6s cubic-bezier(.16,1,.3,1) .2s forwards}
-@keyframes draw{to{stroke-dashoffset:0}}
-${reducedMotion('.in{animation:none;opacity:1}.graph{animation:none;stroke-dashoffset:0}')}`;
-  const inner = `
-${glow(880, 60, 260, -30, 40, 19)}
-${label('Ship log', 44, 52, { size: 10.5 })}
-${txt(F.mono, 'git log --graph --oneline', W - 40, 52, 12, { fill: C.muted, anchor: 'end' })}
-<line x1="${gx}" y1="${top - 5}" x2="${gx}" y2="${H - 34}" stroke="url(#gl)" stroke-width="1.5" pathLength="1" class="graph"/>
-${rows.join('\n')}`;
-  write('shiplog.svg', `${svgOpen(W, H, `Ship log: ${SHIPS.map((s) => `${s.name} — ${s.what}`).join('; ')}`)}<style>${css}</style>${frame(W, H, inner, {
-    extraDefs: `${glowDefs}<linearGradient id="gl" gradientUnits="userSpaceOnUse" x1="0" y1="${top}" x2="0" y2="${H - 34}"><stop offset="0" stop-color="${C.gold}"/><stop offset="1" stop-color="${C.border}"/></linearGradient>`,
-  })}</svg>`);
-}
-
-// ─── 7. Footer, buttons, divider ─────────────────────────────────────────────
-
-function footer() {
-  const lh = 42;
-  const H = 110 + FOOTER.length * lh;
-  const css = `${fadeCss}${reducedMotion('.in{animation:none;opacity:1}')}`;
-  const lines = FOOTER.map((line, i) =>
-    `<g class="in" style="animation-delay:${r2(0.2 + i * 0.2)}s">${txt(F.serif, line, W / 2, 98 + i * lh, 32, { fill: i ? 'url(#fg)' : C.text, anchor: 'middle' })}</g>`);
-  const inner = `
-${glow(W / 2, H, 360, 0, -20, 14)}
-${asterisk(W / 2, 40, 12, { opacity: 0.7, dur: 18 })}
-${lines.join('\n')}`;
-  write('footer.svg', `${svgOpen(W, H, FOOTER.join(' '))}<style>${css}</style>${frame(W, H, inner, {
-    extraDefs: `${glowDefs}<linearGradient id="fg" x1="0" x2="1"><stop offset="0.3" stop-color="${C.goldLight}"/><stop offset="0.7" stop-color="${C.sepia}"/></linearGradient>`,
-  })}</svg>`);
-}
-
-function button(slug, text) {
-  const h = 46;
-  const t = text.toUpperCase();
-  const w = Math.ceil(measure(F.medium, t, 11, 0.22) + 64);
-  write(`btn-${slug}.svg`, `${svgOpen(w, h, text)}
-<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="${C.goldLight}" stop-opacity="0"/><stop offset="0.5" stop-color="${C.goldLight}" stop-opacity="0.22"/><stop offset="1" stop-color="${C.goldLight}" stop-opacity="0"/></linearGradient><clipPath id="b"><rect width="${w}" height="${h}" rx="${h / 2}"/></clipPath></defs>
-<g clip-path="url(#b)">
-  <rect width="${w}" height="${h}" fill="${C.bar}"/>
-  <rect x="-80" width="60" height="${h}" fill="url(#g)"><animate attributeName="x" values="-80;${w + 20};${w + 20}" keyTimes="0;0.3;1" dur="6s" repeatCount="indefinite"/></rect>
-</g>
-<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="${h / 2 - 0.5}" fill="none" stroke="${C.border}"/>
-${txt(F.medium, t, 24, h / 2 + 4, 11, { tracking: 0.22, opacity: 0.88 })}
-${txt(F.medium, ARROW, w - 22, h / 2 + 5, 14, { fill: C.gold, anchor: 'end' })}
-</svg>`);
-}
-
-function divider() {
-  const H = 28;
-  write('divider.svg', `${svgOpen(W, H, 'divider')}
-<defs>
-  <linearGradient id="l" x1="0" x2="1"><stop offset="0" stop-color="${C.border}" stop-opacity="0"/><stop offset="0.5" stop-color="${C.border}"/><stop offset="1" stop-color="${C.border}" stop-opacity="0"/></linearGradient>
-  <linearGradient id="s" x1="0" x2="1"><stop offset="0" stop-color="${C.goldLight}" stop-opacity="0"/><stop offset="0.5" stop-color="${C.goldLight}"/><stop offset="1" stop-color="${C.goldLight}" stop-opacity="0"/></linearGradient>
-</defs>
-<rect x="0" y="${H / 2}" width="${W}" height="1" fill="url(#l)"/>
-<rect x="-200" y="${H / 2 - 0.5}" width="180" height="2" fill="url(#s)"><animate attributeName="x" values="-200;${W + 20};${W + 20}" keyTimes="0;0.45;1" dur="8s" repeatCount="indefinite"/></rect>
-<rect x="${W / 2 - 4}" y="${H / 2 - 4}" width="8" height="8" fill="${C.bg}" stroke="${C.gold}" transform="rotate(45 ${W / 2} ${H / 2})"/>
-</svg>`);
-}
-
-// ─── Run ─────────────────────────────────────────────────────────────────────
-
-console.log('Building profile assets…');
-hero();
-fastfetch();
-shiplog();
-footer();
-button('portfolio', 'Portafolio');
-button('linkedin', 'LinkedIn');
-button('email', 'Email');
-divider();
-
-const activity = await fetchActivity(LOGIN).catch((e) => {
-  console.warn(`  ! live data unavailable: ${e.message}`);
-  return null;
+// Boot log.
+BOOT.forEach((msg) => {
+  parts.push(line(PAD, y, [{ t: '[  ', c: 'faint' }, { t: 'OK', c: 'hi', b: true }, { t: '  ] ', c: 'faint' }, { t: msg, c: 'dim' }], { size: 12, at: t }));
+  y += 18;
+  t += 0.12;
 });
-if (activity) {
-  const today = new Date();
-  now(activity, today);
-  constellation(activity);
-} else {
-  console.log('  (no GitHub token: now.svg and constellation.svg left unchanged)');
+y += 16;
+
+// Banner: figlet name (left) + spinning torus knot (right).
+t = command(y, './whoami --banner', t);
+y += 30;
+const bannerTop = y;
+const figSize = 10;
+const figLh = 12;
+const fig = HERO.name.toUpperCase().split(' ').flatMap((word, wi) => {
+  const rows = figlet.textSync(word, { font: 'ANSI Shadow' }).split('\n').filter((r) => r.trim());
+  return wi ? ['', ...rows] : rows;
+});
+// Solid blocks become crisp rects (text glyphs leave seams between cells);
+// the box-drawing outline of ANSI Shadow stays as grey text: a drop shadow.
+function banner(rows, x0, y0, { blocks = C.hi, shadow = C.faint, at } = {}) {
+  const w = cw(figSize);
+  return rows.map((row, i) => {
+    const top = y0 + i * figLh;
+    const rects = [];
+    const chars = [...row];
+    for (let c = 0; c < chars.length; c++) {
+      if (chars[c] !== '█') continue;
+      let e = c;
+      while (chars[e + 1] === '█') e++;
+      rects.push(`<rect x="${r2(x0 + c * w)}" y="${r2(top)}" width="${r2((e - c + 1) * w + 0.3)}" height="${r2(figLh + 0.3)}"/>`);
+      c = e;
+    }
+    const outline = chars.map((ch) => (ch === '█' ? ' ' : ch)).join('');
+    const delay = at != null ? ` class="p" style="animation-delay:${r2((at + i * 0.045) * K)}s"` : '';
+    return `<g${delay}><g fill="${blocks}">${rects.join('')}</g>${outline.trim() ? `<text x="${r2(x0)}" y="${r2(top + figLh * 0.78)}" font-size="${figSize}" fill="${shadow}">${esc(outline)}</text>` : ''}</g>`;
+  }).join('');
 }
-console.log('Done.');
+parts.push(`<g class="glitch-host">${banner(fig, PAD, y, { at: t })}</g>`);
+parts.push(`<g class="g1">${banner(fig, PAD, y, { blocks: '#9a9a9a', shadow: 'none' })}</g><g class="g2">${banner(fig, PAD, y, { blocks: '#3a3a3a', shadow: 'none' })}</g>`);
+const decoded = t + fig.length * 0.045 + 0.3;
+y += fig.length * figLh + 26;
+
+parts.push(line(PAD, y, [{ t: '// ', c: 'faint' }, { t: HERO.role, c: 'fg' }], { at: decoded }));
+y += LH;
+parts.push(line(PAD, y, [{ t: '// ', c: 'faint' }, { t: HERO.where, c: 'dim' }], { at: decoded + 0.1 }));
+y += LH + 10;
+const heroLine = typed(PAD, y, [{ t: '> ', c: 'dim' }, { t: HERO.line, c: 'hi', b: true }], decoded + 0.4, { speed: 0.03 });
+parts.push(heroLine.svg);
+t = heroLine.end + 0.3;
+
+const knotSize = 9.2;
+const knotLh = 10.2;
+const knotCols = 76;
+const knotRows = 38;
+const knot = renderFrames(torusKnot(), {
+  cols: knotCols, rows: knotRows, frames: 72, scale: 50, aspect: knotLh / cw(knotSize),
+  spin: (p) => [p * Math.PI * 2, p * Math.PI * 2, 0],
+});
+const knotX = W - PAD - knotCols * cw(knotSize);
+const knotY = bannerTop - 76;
+parts.push(flipbook(knot, knotX, knotY, { size: knotSize, lh: knotLh, dur: 12, at: 0.6, cls: 'knot' }));
+parts.push(line(W - PAD, knotY + knotRows * knotLh + 4, [{ t: 'torusKnot(1, 0.2, p=2, q=3) · ramp " .:-+*=%@#"', c: 'faint' }], { size: 10, anchor: 'end', at: 1.2 }));
+y = Math.max(y, knotY + knotRows * knotLh + 4) + 44;
+
+// 01 · fastfetch with the logo configured on the real machine
+// (~/.config/omarchy/branding/about.txt, copied to logo.txt): braille art,
+// drawn dot by dot so it does not depend on the font having braille glyphs.
+rule(y, 1, 'fastfetch', t);
+y += 38;
+t = command(y, 'fastfetch', t + 0.2);
+y += 30;
+const ffTop = y;
+const logo = fs.readFileSync(path.join(ROOT, 'logo.txt'), 'utf8').split('\n').filter((r, i, a) => r.trim() || i < a.length - 1);
+const logoCw = 6.6;
+const logoLh = logoCw * 2; // braille cell = 2x4 dots on a square pitch
+// Braille bit -> [column, row] of the dot inside the 2x4 cell.
+const BRAILLE = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [0, 3], [1, 3]];
+const dots = [];
+logo.forEach((row, ri) => {
+  [...row].forEach((ch, ci) => {
+    const bits = ch.codePointAt(0) - 0x2800;
+    if (bits <= 0 || bits > 0xff) return;
+    BRAILLE.forEach(([dx, dy], b) => {
+      if (bits & (1 << b)) dots.push(`<circle cx="${r2(PAD + ci * logoCw + (dx + 0.5) * logoCw / 2)}" cy="${r2(ffTop - 14 + ri * logoLh + (dy + 0.5) * logoLh / 4)}" r="${r2(logoCw * 0.17)}"/>`);
+    });
+  });
+});
+parts.push(`<g class="p" fill="${C.fg}" style="animation-delay:${r2(t * K)}s">${dots.join('')}</g>`);
+const logoW = Math.max(...logo.map((r) => [...r].length)) * logoCw;
+const logoH = logo.length * logoLh;
+const ix = PAD + logoW + 48;
+const [user, host] = SYSTEM.host.split('@');
+parts.push(line(ix, y, [{ t: user, c: 'hi', b: true }, { t: '@', c: 'faint' }, { t: host, c: 'hi', b: true }], { at: t }));
+y += LH;
+parts.push(line(ix, y, [{ t: '─'.repeat(len(SYSTEM.host)), c: 'faint' }], { at: t }));
+y += LH;
+SYSTEM.rows.forEach(([k, v], i) => {
+  parts.push(line(ix, y, [{ t: k.padEnd(8), c: 'hi', b: true }, { t: v, c: 'fg' }], { at: t + 0.04 * (i + 1) }));
+  y += LH;
+});
+y += 6;
+const shades = [C.ghost, '#3a3a3a', C.faint, '#6b6b6b', C.dim, '#b0b0b0', C.fg, C.hi];
+parts.push(`<g class="p" style="animation-delay:${r2((t + 0.5) * K)}s">${shades.map((c, i) => `<rect x="${r2(ix + i * 28)}" y="${r2(y - 11)}" width="24" height="12" fill="${c}"/>`).join('')}</g>`);
+t += 0.7;
+y = Math.max(y, ffTop - 14 + logoH) + 44;
+
+// 02 · ahora mismo (live).
+rule(y, 2, 'ahora mismo', t);
+y += 38;
+t = command(y, 'gh activity --latest', t + 0.2);
+y += 30;
+if (activity?.latest) {
+  const msg = activity.latest.message.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim();
+  parts.push(line(PAD, y, [{ t: 'repo      ', c: 'dim' }, { t: activity.latest.repo, c: 'hi', b: true }, { t: `  ·  ${ago(activity.latest.date)}`, c: 'dim' }], { at: t }));
+  y += LH;
+  parts.push(line(PAD, y, [{ t: 'commit    ', c: 'dim' }, { t: msg.length > 90 ? `${msg.slice(0, 89)}…` : msg, c: 'fg' }], { at: t + 0.06 }));
+  y += LH + 12;
+}
+if (activity?.languages?.length) {
+  parts.push(line(PAD, y, [{ t: 'lenguajes · últimos 12 meses', c: 'dim' }], { at: t + 0.12 }));
+  y += LH + 4;
+  const barCols = 48;
+  activity.languages.forEach((l, i) => {
+    const full = Math.max(1, Math.round(l.pct * barCols));
+    const at = t + 0.2 + i * 0.08;
+    parts.push(line(PAD, y, [{ t: l.name.padEnd(13), c: 'fg' }], { at }));
+    const bar = typed(PAD + 13 * cw(), y, [{ t: '█'.repeat(full), c: 'hi' }, { t: '░'.repeat(barCols - full), c: 'ghost' }], at, { speed: 0.012 });
+    parts.push(bar.svg);
+    parts.push(line(PAD + (13 + barCols + 2) * cw(), y, [{ t: `${(l.pct * 100).toFixed(1).padStart(5)}%`, c: 'dim' }], { at: at + 0.4 }));
+    y += LH;
+  });
+}
+t += 1.1;
+y += 34;
+
+// 03 · un año de commits (live): the calendar in the same ASCII ramp.
+if (activity?.weeks) {
+  rule(y, 3, 'un año de commits', t);
+  y += 38;
+  t = command(y, 'gh contributions --year', t + 0.2);
+  y += 30;
+  const fmt = (n) => n.toLocaleString('es-CO');
+  parts.push(line(PAD, y, [
+    { t: fmt(activity.total), c: 'hi', b: true }, { t: ' contribuciones   ', c: 'dim' },
+    { t: String(activity.streak.current), c: 'hi', b: true }, { t: ' racha actual   ', c: 'dim' },
+    { t: String(activity.streak.longest), c: 'hi', b: true }, { t: ' racha más larga', c: 'dim' },
+  ], { at: t }));
+  y += LH + 8;
+  const glyph = ['·', ':', '+', '%', '@'];
+  const tone = ['ghost', 'faint', 'dim', 'fg', 'hi'];
+  const weeks = activity.weeks;
+  const gx = PAD + 5 * cw();
+  // Month labels.
+  let monthRow = ' '.repeat(weeks.length * 2);
+  let lastMonth = -1;
+  weeks.forEach((w, wi) => {
+    const d = new Date(`${w[0].date}T00:00:00Z`);
+    if (d.getUTCMonth() !== lastMonth && d.getUTCDate() <= 7 && wi < weeks.length - 2) {
+      lastMonth = d.getUTCMonth();
+      monthRow = monthRow.slice(0, wi * 2) + MONTHS[lastMonth] + monthRow.slice(wi * 2 + 3);
+    }
+  });
+  parts.push(line(gx, y, [{ t: monthRow, c: 'faint' }], { size: SIZE, at: t + 0.1 }));
+  y += LH - 2;
+  const dayNames = ['', 'lun', '', 'mié', '', 'vie', ''];
+  const twinkles = [];
+  for (let d = 0; d < 7; d++) {
+    const runs = [];
+    weeks.forEach((w, wi) => {
+      const day = w.find((x) => new Date(`${x.date}T00:00:00Z`).getUTCDay() === d);
+      if (!day) { runs.push({ t: '  ', c: 'ghost' }); return; }
+      runs.push({ t: `${glyph[day.level]} `, c: tone[day.level], b: day.level === 4 });
+      if (day.level >= 3 && Math.abs(hash(day.date)) % 3 === 0) {
+        twinkles.push(`<text x="${r2(gx + wi * 2 * cw())}" y="${r2(y)}" class="tw hi b" style="animation-delay:${r2(1 + (Math.abs(hash(day.date)) % 37) / 10)}s">${glyph[day.level]}</text>`);
+      }
+    });
+    parts.push(line(PAD, y, [{ t: dayNames[d].padEnd(5), c: 'faint' }], { at: t + 0.15 + d * 0.06 }));
+    parts.push(line(gx, y, runs, { at: t + 0.15 + d * 0.06 }));
+    y += LH - 4;
+  }
+  parts.push(`<g class="p" style="animation-delay:${r2((t + 0.6) * K)}s">${twinkles.join('')}</g>`);
+  y += 6;
+  parts.push(line(gx, y, [{ t: 'menos ', c: 'faint' }, ...glyph.map((g, i) => ({ t: `${g} `, c: tone[i] })), { t: 'más', c: 'faint' }], { at: t + 0.6 }));
+  t += 1;
+  y += 46;
+}
+
+// 04 · ship log as git log --graph.
+rule(y, 4, 'ship log', t);
+y += 38;
+t = command(y, 'git log --graph --oneline', t + 0.2);
+y += 30;
+SHIPS.forEach((s, i) => {
+  const sha = (hash(s.name) >>> 0).toString(16).padStart(8, '0').slice(0, 7);
+  const deco = [];
+  if (i === 0) deco.push({ t: '(', c: 'dim' }, { t: 'HEAD -> main', c: 'hi', b: true }, { t: ') ', c: 'dim' });
+  if (s.tag) deco.push({ t: '(', c: 'dim' }, { t: `tag: ${s.tag}`, c: 'hi' }, { t: ') ', c: 'dim' });
+  const at = t + i * 0.12;
+  parts.push(line(PAD, y, [{ t: '* ', c: 'hi', b: true }, { t: `${sha} `, c: 'dim' }, ...deco, { t: 'feat: ', c: 'dim' }, { t: s.name, c: 'hi', b: true }], { at }));
+  parts.push(line(W - PAD, y, [{ t: `[${s.kind}${s.link ? ' ↗' : ''}]`, c: 'faint' }], { at, anchor: 'end' }));
+  y += LH;
+  const pipe = i < SHIPS.length - 1 ? '│ ' : '  ';
+  parts.push(line(PAD, y, [{ t: pipe, c: 'faint' }, { t: `  ${s.what}`, c: 'fg' }, { t: `   ${s.stack}`, c: 'faint' }], { at: at + 0.04 }));
+  y += LH;
+  if (i < SHIPS.length - 1) { parts.push(line(PAD, y, [{ t: '│', c: 'faint' }], { at: at + 0.06 })); y += LH; }
+});
+t += SHIPS.length * 0.12 + 0.4;
+y += 34;
+
+// 05 · eof.
+rule(y, 5, 'eof', t);
+y += 38;
+t = command(y, 'cat ~/.plan', t + 0.2);
+y += 34;
+FOOTER.forEach((f, i) => {
+  parts.push(line(PAD, y, [{ t: f, c: 'hi', b: true }], { size: 17, at: t + i * 0.1 }));
+  y += 28;
+});
+parts.push(line(PAD, y, [{ t: '→ ', c: 'dim' }, { t: SITE.replace('https://', ''), c: 'fg' }], { at: t + 0.2 }));
+y += 40;
+const promptW = PROMPT.reduce((s, r) => s + len(r.t), 0) * cw();
+parts.push(line(PAD, y, PROMPT, { at: t + 0.5 }));
+parts.push(`<rect x="${r2(PAD + promptW)}" y="${r2(y - SIZE * 0.95)}" width="${r2(cw())}" height="${r2(SIZE * 1.25)}" fill="${C.hi}" opacity="0"><animate attributeName="opacity" values="0.9;0" dur="1.06s" begin="${r2((t + 0.5) * K)}s" repeatCount="indefinite" calcMode="discrete"/></rect>`);
+const H = Math.ceil(y + 40);
+
+// ─── Assemble ────────────────────────────────────────────────────────────────
+
+const css = `
+svg{font-size:${SIZE}px}
+text{font-family:'JBM',ui-monospace,monospace;white-space:pre}
+.fg{fill:${C.fg}}.hi{fill:${C.hi}}.dim{fill:${C.dim}}.faint{fill:${C.faint}}.ghost{fill:${C.ghost}}.b{font-weight:700}
+.p{opacity:0;animation:p .01s linear forwards}
+@keyframes p{to{opacity:1}}
+.kf{opacity:0;fill:${C.fg};animation-timing-function:steps(1,end);animation-iteration-count:infinite}
+.knot .kf{animation-duration:12s;animation-name:k72}
+@keyframes k72{0%{opacity:1}${r2(100 / 72)}%,100%{opacity:0}}
+.g1,.g2{opacity:0;animation:9s steps(1,end) ${r2(decoded * K + 1.5)}s infinite}
+.g1{animation-name:g1}.g2{animation-name:g2}
+@keyframes g1{0%,91%,100%{opacity:0;transform:none;clip-path:inset(0 0 100% 0)}92%{opacity:.7;transform:translate(-5px,0);clip-path:inset(10% 0 62% 0)}94%{opacity:.6;transform:translate(4px,0);clip-path:inset(55% 0 20% 0)}96%{opacity:0}}
+@keyframes g2{0%,91%,100%{opacity:0;transform:none;clip-path:inset(0 0 100% 0)}92%{opacity:.8;transform:translate(5px,0);clip-path:inset(68% 0 6% 0)}94%{opacity:.7;transform:translate(-3px,0);clip-path:inset(22% 0 52% 0)}96%{opacity:0}}
+.glitch-host{animation:jit 9s steps(1,end) ${r2(decoded * K + 1.5)}s infinite}
+@keyframes jit{0%,91%,96%,100%{transform:none}92%{transform:translate(2px,0)}94%{transform:translate(-2px,0)}}
+.tw{animation:tw 3.2s ease-in-out infinite}
+@keyframes tw{0%,100%{opacity:0}50%{opacity:1}}
+.screen{animation:flicker 7s steps(1,end) infinite}
+@keyframes flicker{0%,100%{opacity:1}31%{opacity:.96}32%{opacity:1}77%{opacity:.97}78%{opacity:1}}
+.sweep{animation:sweep 8s linear infinite}
+@keyframes sweep{from{transform:translateY(-160px)}to{transform:translateY(${H}px)}}
+@media (prefers-reduced-motion: reduce){
+  .p{animation:none;opacity:1}.kf{animation:none}.kf:first-child{opacity:1}
+  .g1,.g2,.tw,.sweep{display:none}.glitch-host,.screen{animation:none}
+}`;
+
+const body = `
+<defs>
+  ${defs.join('')}
+  <clipPath id="frame"><rect width="${W}" height="${H}" rx="14"/></clipPath>
+  <pattern id="scan" width="4" height="3" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#ffffff" opacity="0.035"/></pattern>
+  <radialGradient id="vig" cx="50%" cy="40%" r="75%"><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient>
+  <linearGradient id="band" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.045"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+</defs>
+<g clip-path="url(#frame)">
+  <rect width="${W}" height="${H}" fill="${C.bg}"/>
+  <rect width="${W}" height="34" fill="#0c0c0c"/>
+  <line x1="0" y1="34.5" x2="${W}" y2="34.5" stroke="#1c1c1c"/>
+  ${[20, 38, 56].map((x) => `<circle cx="${x}" cy="17" r="5" fill="#2a2a2a"/>`).join('')}
+  ${line(W / 2, 22, [{ t: `${SYSTEM.host}: ~ — fish`, c: 'faint' }], { size: 11.5, anchor: 'middle' })}
+  ${line(W - 18, 22, [{ t: 'tty1', c: 'ghost' }], { size: 11, anchor: 'end' })}
+  <g class="screen">${parts.join('\n')}</g>
+  <rect width="${W}" height="${H}" fill="url(#scan)"/>
+  <rect y="0" width="${W}" height="160" fill="url(#band)" class="sweep"/>
+  <rect width="${W}" height="${H}" fill="url(#vig)"/>
+</g>
+<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="14" fill="none" stroke="#1f1f1f"/>`;
+
+// Embed only the glyphs this file uses.
+const used = new Set([...body.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'), ...' →↗']);
+const text = [...used].join('');
+async function fontFace(file, url, weight) {
+  const p = path.join(CACHE, file);
+  if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(await (await fetch(url)).arrayBuffer()));
+  const woff2 = await subsetFont(fs.readFileSync(p), text, { targetFormat: 'woff2' });
+  return `@font-face{font-family:'JBM';font-weight:${weight};src:url(data:font/woff2;base64,${woff2.toString('base64')}) format('woff2')}`;
+}
+const GF = 'https://fonts.gstatic.com/s/jetbrainsmono/v24/';
+const fonts = [
+  await fontFace('jbm-400.ttf', `${GF}tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPQ.ttf`, 400),
+  await fontFace('jbm-700.ttf', `${GF}tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8L6tjPQ.ttf`, 700),
+].join('');
+
+const title = `${HERO.name} — ${HERO.role}. ${HERO.line}`;
+const desc = [
+  SYSTEM.rows.map(([k, v]) => `${k}: ${v}`).join('; '),
+  activity?.latest ? `Último push: ${activity.latest.repo}.` : '',
+  activity ? `${activity.total} contribuciones en el último año.` : '',
+  `Proyectos: ${SHIPS.map((s) => `${s.name} — ${s.what}`).join('; ')}.`,
+  FOOTER.join(' '),
+].filter(Boolean).join(' ');
+
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-labelledby="ttl dsc" xml:space="preserve"><title id="ttl">${esc(title)}</title><desc id="dsc">${esc(desc)}</desc><style>${fonts}${css}</style>${body}</svg>`;
+fs.writeFileSync(path.join(OUT, 'terminal.svg'), svg);
+console.log(`  terminal.svg  ${W}x${H}  ${(svg.length / 1024).toFixed(0)} KB  session ${r2(t * K)}s${activity ? '' : '  (no activity data)'}`);

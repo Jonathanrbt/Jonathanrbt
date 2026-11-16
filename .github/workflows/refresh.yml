@@ -1,5 +1,5 @@
-# Rebuilds the profile SVGs every day so the live panels (now.svg,
-# constellation.svg) reflect current GitHub activity. Commits only on change.
+# Rebuilds assets/terminal.svg every day so its live sections (latest push,
+# languages, contribution map) reflect GitHub activity. Commits only on change.
 name: Refresh profile
 
 on:
@@ -41,7 +41,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets
+          git add assets scripts/activity.json
           git diff --cached --quiet && exit 0
-          git commit -m 'chore: 🔧 refresh live profile panels'
+          git commit -m 'chore: 🔧 refresh live profile terminal'
           git push

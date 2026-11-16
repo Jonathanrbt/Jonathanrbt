@@ -12,6 +12,15 @@ export const HERO = {
   line: 'Construyo agentes de IA y productos de punta a punta.',
 };
 
+// systemd-style boot lines printed before the banner.
+export const BOOT = [
+  'Reached target Hyprland (Omarchy).',
+  'Started claude-code.service — pair programmer.',
+  'Mounted /home/jonatin/walle — second brain.',
+  'Listening on hyperswarm (JoJun).',
+  'Started agents.target — LangGraph · RAG.',
+];
+
 // fastfetch-style system card: [key, value].
 export const SYSTEM = {
   host: 'jonatin@cachyos',
