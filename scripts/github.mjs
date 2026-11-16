@@ -1,4 +1,4 @@
-// Live data for the "Ahora mismo" and constellation widgets, from the GitHub
+// Live data for the "ahora mismo" and contribution-map sections, from the GitHub
 // GraphQL API. Only public repositories are read; the contribution calendar is
 // the same one shown on the public profile.
 //
