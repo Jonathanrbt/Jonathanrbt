@@ -42,6 +42,14 @@ const PROMPT = [{ t: 'jonatin@cachyos', c: 'hi', b: true }, { t: ' ~', c: 'dim' 
 // so it plays in about nine real seconds.
 const K = 0.6;
 
+// Performance: an animated SVG inside <img> is re-rasterized whole on every
+// change. Every endless animation therefore changes only on one shared
+// 12 fps grid (TICK), so they all land on the same repaint instead of each
+// forcing its own: ~12 repaints/s instead of 60-80.
+const FPS = 12;
+const q = (sec) => (Math.round(sec * FPS) / FPS).toFixed(4); // seconds on the grid
+const pct = (ticks, total) => ((ticks / total) * 100).toFixed(4);
+
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const r2 = (n) => Math.round(n * 100) / 100;
 const hash = (s) => [...s].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) | 0, 7);
@@ -71,7 +79,7 @@ function typed(x, y, runs, at, { speed = 0.045, size = SIZE, keepCursor = false 
   const xs = Array.from({ length: n + 1 }, (_, k) => r2(x + k * w)).join(';');
   defs.push(`<clipPath id="${id}"><rect x="${r2(x)}" y="${r2(y - size)}" height="${r2(size * 1.5)}" width="0"><animate attributeName="width" values="${widths}" dur="${dur}s" begin="${begin}s" calcMode="discrete" fill="freeze"/></rect></clipPath>`);
   const cursorEnd = keepCursor ? '' : `<set attributeName="opacity" to="0" begin="${r2(begin + dur + 0.1)}s"/>`;
-  const cursor = `<rect x="${r2(x)}" y="${r2(y - size * 0.95)}" width="${r2(w)}" height="${r2(size * 1.25)}" fill="${C.hi}" opacity="0"><set attributeName="opacity" to="0.9" begin="${r2(Math.max(0, begin - 0.15))}s"/><animate attributeName="x" values="${xs}" dur="${dur}s" begin="${begin}s" calcMode="discrete" fill="freeze"/>${cursorEnd}${keepCursor ? `<animate attributeName="opacity" values="0.9;0" dur="1.06s" begin="${r2(begin + dur)}s" repeatCount="indefinite" calcMode="discrete"/>` : ''}</rect>`;
+  const cursor = `<rect x="${r2(x)}" y="${r2(y - size * 0.95)}" width="${r2(w)}" height="${r2(size * 1.25)}" fill="${C.hi}" opacity="0"><set attributeName="opacity" to="0.9" begin="${r2(Math.max(0, begin - 0.15))}s"/><animate attributeName="x" values="${xs}" dur="${dur}s" begin="${begin}s" calcMode="discrete" fill="freeze"/>${cursorEnd}${keepCursor ? `<animate attributeName="opacity" values="0.9;0" dur="1s" begin="${q(begin + dur)}s" repeatCount="indefinite" calcMode="discrete"/>` : ''}</rect>`;
   return { svg: `<g clip-path="url(#${id})">${line(x, y, runs, { size })}</g>${cursor}`, end: at + dur / K };
 }
 
@@ -101,7 +109,7 @@ function flipbook(frames, x, y, { size, lh, dur, at, cls }) {
       const body = row.trim();
       return body ? `<tspan x="${r2(x + lead * w)}" y="${r2(y + ri * lh)}">${esc(body)}</tspan>` : '';
     }).join('');
-    const delay = r2(-(((n - i) % n) * step));
+    const delay = (-(((n - i) % n) * step)).toFixed(4);
     return `<text class="kf" style="animation-delay:${delay}s">${tspans}</text>`;
   }).join('');
   return `<g class="${cls} p" style="animation-delay:${r2(at * K)}s" font-size="${size}">${groups}</g>`;
@@ -308,7 +316,7 @@ if (activity?.weeks) {
       if (!day) { runs.push({ t: '  ', c: 'ghost' }); return; }
       runs.push({ t: `${glyph[day.level]} `, c: tone[day.level], b: day.level === 4 });
       if (day.level >= 3 && Math.abs(hash(day.date)) % 3 === 0) {
-        twinkles.push(`<text x="${r2(gx + wi * 2 * cw())}" y="${r2(y)}" class="tw hi b" style="animation-delay:${r2(1 + (Math.abs(hash(day.date)) % 37) / 10)}s">${glyph[day.level]}</text>`);
+        twinkles.push(`<text x="${r2(gx + wi * 2 * cw())}" y="${r2(y)}" class="tw hi b" style="animation-delay:${q(1 + (Math.abs(hash(day.date)) % 37) / 10)}s">${glyph[day.level]}</text>`);
       }
     });
     parts.push(line(PAD, y, [{ t: dayNames[d].padEnd(5), c: 'faint' }], { at: t + 0.15 + d * 0.06 }));
@@ -357,7 +365,8 @@ parts.push(line(PAD, y, [{ t: '→ ', c: 'dim' }, { t: SITE.replace('https://', 
 y += 40;
 const promptW = PROMPT.reduce((s, r) => s + len(r.t), 0) * cw();
 parts.push(line(PAD, y, PROMPT, { at: t + 0.5 }));
-parts.push(`<rect x="${r2(PAD + promptW)}" y="${r2(y - SIZE * 0.95)}" width="${r2(cw())}" height="${r2(SIZE * 1.25)}" fill="${C.hi}" opacity="0"><animate attributeName="opacity" values="0.9;0" dur="1.06s" begin="${r2((t + 0.5) * K)}s" repeatCount="indefinite" calcMode="discrete"/></rect>`);
+// CSS, not SMIL: an endless SMIL animation makes Chromium repaint the image every frame.
+parts.push(`<rect x="${r2(PAD + promptW)}" y="${r2(y - SIZE * 0.95)}" width="${r2(cw())}" height="${r2(SIZE * 1.25)}" fill="${C.hi}" class="blink" style="animation-delay:${q((t + 0.5) * K)}s"/>`);
 const H = Math.ceil(y + 40);
 
 // ─── Assemble ────────────────────────────────────────────────────────────────
@@ -368,24 +377,24 @@ text{font-family:'JBM',ui-monospace,monospace;white-space:pre}
 .fg{fill:${C.fg}}.hi{fill:${C.hi}}.dim{fill:${C.dim}}.faint{fill:${C.faint}}.ghost{fill:${C.ghost}}.b{font-weight:700}
 .p{opacity:0;animation:p .01s linear forwards}
 @keyframes p{to{opacity:1}}
-.kf{opacity:0;fill:${C.fg};animation-timing-function:steps(1,end);animation-iteration-count:infinite}
+.kf{visibility:hidden;fill:${C.fg};animation-timing-function:steps(1,end);animation-iteration-count:infinite}
 .knot .kf{animation-duration:12s;animation-name:k72}
-@keyframes k72{0%{opacity:1}${r2(100 / 72)}%,100%{opacity:0}}
-.g1,.g2{opacity:0;animation:9s steps(1,end) ${r2(decoded * K + 1.5)}s infinite}
+@keyframes k72{0%{visibility:visible}${pct(1, 72)}%,100%{visibility:hidden}}
+.g1,.g2{opacity:0;animation:9s steps(1,end) ${q(decoded * K + 1.5)}s infinite}
 .g1{animation-name:g1}.g2{animation-name:g2}
-@keyframes g1{0%,91%,100%{opacity:0;transform:none;clip-path:inset(0 0 100% 0)}92%{opacity:.7;transform:translate(-5px,0);clip-path:inset(10% 0 62% 0)}94%{opacity:.6;transform:translate(4px,0);clip-path:inset(55% 0 20% 0)}96%{opacity:0}}
-@keyframes g2{0%,91%,100%{opacity:0;transform:none;clip-path:inset(0 0 100% 0)}92%{opacity:.8;transform:translate(5px,0);clip-path:inset(68% 0 6% 0)}94%{opacity:.7;transform:translate(-3px,0);clip-path:inset(22% 0 52% 0)}96%{opacity:0}}
-.glitch-host{animation:jit 9s steps(1,end) ${r2(decoded * K + 1.5)}s infinite}
-@keyframes jit{0%,91%,96%,100%{transform:none}92%{transform:translate(2px,0)}94%{transform:translate(-2px,0)}}
-.tw{animation:tw 3.2s ease-in-out infinite}
+@keyframes g1{0%,${pct(98, 108)}%,100%{opacity:0;transform:none;clip-path:inset(0 0 100% 0)}${pct(99, 108)}%{opacity:.7;transform:translate(-5px,0);clip-path:inset(10% 0 62% 0)}${pct(101, 108)}%{opacity:.6;transform:translate(4px,0);clip-path:inset(55% 0 20% 0)}${pct(103, 108)}%{opacity:0}}
+@keyframes g2{0%,${pct(98, 108)}%,100%{opacity:0;transform:none;clip-path:inset(0 0 100% 0)}${pct(99, 108)}%{opacity:.8;transform:translate(5px,0);clip-path:inset(68% 0 6% 0)}${pct(101, 108)}%{opacity:.7;transform:translate(-3px,0);clip-path:inset(22% 0 52% 0)}${pct(103, 108)}%{opacity:0}}
+.glitch-host{animation:jit 9s steps(1,end) ${q(decoded * K + 1.5)}s infinite}
+@keyframes jit{0%,${pct(98, 108)}%,${pct(103, 108)}%,100%{transform:none}${pct(99, 108)}%{transform:translate(2px,0)}${pct(101, 108)}%{transform:translate(-2px,0)}}
+.blink{opacity:0;animation:blink 1s steps(1,end) infinite}
+@keyframes blink{0%{opacity:.9}50%,100%{opacity:0}}
+.tw{animation:tw ${(40 / FPS).toFixed(4)}s steps(20,end) infinite}
 @keyframes tw{0%,100%{opacity:0}50%{opacity:1}}
 .screen{animation:flicker 7s steps(1,end) infinite}
-@keyframes flicker{0%,100%{opacity:1}31%{opacity:.96}32%{opacity:1}77%{opacity:.97}78%{opacity:1}}
-.sweep{animation:sweep 8s linear infinite}
-@keyframes sweep{from{transform:translateY(-160px)}to{transform:translateY(${H}px)}}
+@keyframes flicker{0%,100%{opacity:1}${pct(26, 84)}%{opacity:.96}${pct(27, 84)}%{opacity:1}${pct(65, 84)}%{opacity:.97}${pct(66, 84)}%{opacity:1}}
 @media (prefers-reduced-motion: reduce){
-  .p{animation:none;opacity:1}.kf{animation:none}.kf:first-child{opacity:1}
-  .g1,.g2,.tw,.sweep{display:none}.glitch-host,.screen{animation:none}
+  .p{animation:none;opacity:1}.kf{animation:none}.kf:first-child{visibility:visible}
+  .g1,.g2,.tw{display:none}.blink{animation:none;opacity:.9}.glitch-host,.screen{animation:none}
 }`;
 
 const body = `
@@ -394,7 +403,6 @@ const body = `
   <clipPath id="frame"><rect width="${W}" height="${H}" rx="14"/></clipPath>
   <pattern id="scan" width="4" height="3" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#ffffff" opacity="0.035"/></pattern>
   <radialGradient id="vig" cx="50%" cy="40%" r="75%"><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient>
-  <linearGradient id="band" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.045"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
 </defs>
 <g clip-path="url(#frame)">
   <rect width="${W}" height="${H}" fill="${C.bg}"/>
@@ -405,7 +413,6 @@ const body = `
   ${line(W - 18, 22, [{ t: 'tty1', c: 'ghost' }], { size: 11, anchor: 'end' })}
   <g class="screen">${parts.join('\n')}</g>
   <rect width="${W}" height="${H}" fill="url(#scan)"/>
-  <rect y="0" width="${W}" height="160" fill="url(#band)" class="sweep"/>
   <rect width="${W}" height="${H}" fill="url(#vig)"/>
 </g>
 <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="14" fill="none" stroke="#1f1f1f"/>`;
