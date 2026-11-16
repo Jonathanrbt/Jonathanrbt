@@ -7,6 +7,7 @@ export const SITE = 'https://jonathanrbt.lat';
 
 export const HERO = {
   name: 'Jonathan Romero',
+  handle: 'JonathanRBT', // drawn in the banner
   role: 'Full Stack & AI-Integrations Developer',
   where: 'Bogotá · Remoto · Híbrido',
   line: 'Construyo agentes de IA y productos de punta a punta.',

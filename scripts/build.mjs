@@ -150,16 +150,13 @@ BOOT.forEach((msg) => {
 });
 y += 16;
 
-// Banner: figlet name (left) + spinning torus knot (right).
-t = command(y, './whoami --banner', t);
-y += 30;
+// Banner: the handle in figlet on one line (left) and the torus knot (right).
+y += 14;
 const bannerTop = y;
-const figSize = 10;
-const figLh = 12;
-const fig = HERO.name.toUpperCase().split(' ').flatMap((word, wi) => {
-  const rows = figlet.textSync(word, { font: 'ANSI Shadow' }).split('\n').filter((r) => r.trim());
-  return wi ? ['', ...rows] : rows;
-});
+const figSize = 9;
+const figLh = 10.8;
+const handle = HERO.handle.toUpperCase().replace(/([A-Z]{3})$/, ' $1'); // JONATHAN RBT
+const fig = figlet.textSync(handle, { font: 'ANSI Shadow' }).split('\n').filter((r) => r.trim());
 // Solid blocks become crisp rects (text glyphs leave seams between cells);
 // the box-drawing outline of ANSI Shadow stays as grey text: a drop shadow.
 function banner(rows, x0, y0, { blocks = C.hi, shadow = C.faint, at } = {}) {
@@ -193,16 +190,17 @@ const heroLine = typed(PAD, y, [{ t: '> ', c: 'dim' }, { t: HERO.line, c: 'hi', 
 parts.push(heroLine.svg);
 t = heroLine.end + 0.3;
 
-const knotSize = 9.2;
-const knotLh = 10.2;
-const knotCols = 76;
-const knotRows = 38;
+// The spinning torus knot, smaller than the name block beside it.
+const knotSize = 8;
+const knotLh = 8.9;
+const knotCols = 64;
+const knotRows = 32;
 const knot = renderFrames(torusKnot(), {
-  cols: knotCols, rows: knotRows, frames: 72, scale: 50, aspect: knotLh / cw(knotSize),
+  cols: knotCols, rows: knotRows, frames: 72, scale: 42, aspect: knotLh / cw(knotSize),
   spin: (p) => [p * Math.PI * 2, p * Math.PI * 2, 0],
 });
 const knotX = W - PAD - knotCols * cw(knotSize);
-const knotY = bannerTop - 76;
+const knotY = bannerTop - 40;
 parts.push(flipbook(knot, knotX, knotY, { size: knotSize, lh: knotLh, dur: 12, at: 0.6, cls: 'knot' }));
 parts.push(line(W - PAD, knotY + knotRows * knotLh + 4, [{ t: 'torusKnot(1, 0.2, p=2, q=3) · ramp " .:-+*=%@#"', c: 'faint' }], { size: 10, anchor: 'end', at: 1.2 }));
 y = Math.max(y, knotY + knotRows * knotLh + 4) + 44;
