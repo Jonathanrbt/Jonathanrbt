@@ -16,7 +16,7 @@
   <sub>
     <a href="https://gambitoai.pages.dev/"><code>gambito</code></a>
     <a href="https://jojun-cli.pages.dev/"><code>jojun-cli</code></a>
-    <a href="https://github.com/Jonathanrbt/platform-migratory-frontend"><code>platform-migratory</code></a>
+    <a href="https://platform-migratory-frontend.pages.dev/"><code>platform-migratory</code></a>
     <a href="https://web-production-9f9d1.up.railway.app/"><code>adkio</code></a>
     <a href="https://sniff-plum.vercel.app/"><code>sniff</code></a>
   </sub>
